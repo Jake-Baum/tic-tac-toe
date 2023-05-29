@@ -15,7 +15,7 @@ func (p parseError) Error() string {
 }
 
 func CreateMessageResponse(message string, args ...any) gin.H {
-	return gin.H{"message": fmt.Sprintf(message, args)}
+	return gin.H{"message": fmt.Sprintf(message, args...)}
 }
 
 func IntPathParam(c *gin.Context, name string) (int, error) {

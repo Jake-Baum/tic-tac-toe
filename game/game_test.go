@@ -1,6 +1,9 @@
 package game
 
-import "testing"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
 func TestGame_IsWinner_EmptyBoard(t *testing.T) {
 	var game = Game{
@@ -13,8 +16,8 @@ func TestGame_IsWinner_EmptyBoard(t *testing.T) {
 
 	var isWinner, winner = game.IsWinner()
 
-	assertBool(t, isWinner, false)
-	assertPiece(t, winner, EMPTY)
+	assert.Equal(t, isWinner, false)
+	assert.Equal(t, winner, EMPTY)
 }
 
 func TestGame_IsWinner_Row(t *testing.T) {
@@ -28,8 +31,8 @@ func TestGame_IsWinner_Row(t *testing.T) {
 
 	var isWinner, winner = game.IsWinner()
 
-	assertBool(t, isWinner, true)
-	assertPiece(t, winner, X)
+	assert.Equal(t, isWinner, true)
+	assert.Equal(t, winner, X)
 }
 
 func TestGame_IsWinner_Column(t *testing.T) {
@@ -43,8 +46,8 @@ func TestGame_IsWinner_Column(t *testing.T) {
 
 	var isWinner, winner = game.IsWinner()
 
-	assertBool(t, isWinner, true)
-	assertPiece(t, winner, O)
+	assert.Equal(t, isWinner, true)
+	assert.Equal(t, winner, O)
 }
 
 func TestGame_IsWinner_Diag1(t *testing.T) {
@@ -58,8 +61,8 @@ func TestGame_IsWinner_Diag1(t *testing.T) {
 
 	var isWinner, winner = game.IsWinner()
 
-	assertBool(t, isWinner, true)
-	assertPiece(t, winner, X)
+	assert.Equal(t, isWinner, true)
+	assert.Equal(t, winner, X)
 }
 
 func TestGame_IsWinner_Diag2(t *testing.T) {
@@ -73,8 +76,8 @@ func TestGame_IsWinner_Diag2(t *testing.T) {
 
 	var isWinner, winner = game.IsWinner()
 
-	assertBool(t, isWinner, true)
-	assertPiece(t, winner, O)
+	assert.Equal(t, isWinner, true)
+	assert.Equal(t, winner, O)
 }
 
 func TestGame_IsValidMove_Success(t *testing.T) {
@@ -88,7 +91,7 @@ func TestGame_IsValidMove_Success(t *testing.T) {
 
 	isValidMove := game.IsValidMove(3)
 
-	assertBool(t, isValidMove, true)
+	assert.Equal(t, isValidMove, true)
 }
 
 func TestGame_IsValidMove_TooBig(t *testing.T) {
@@ -102,7 +105,7 @@ func TestGame_IsValidMove_TooBig(t *testing.T) {
 
 	isValidMove := game.IsValidMove(9)
 
-	assertBool(t, isValidMove, false)
+	assert.Equal(t, isValidMove, false)
 
 }
 
@@ -117,7 +120,7 @@ func TestGame_IsValidMove_TooSmall(t *testing.T) {
 
 	isValidMove := game.IsValidMove(-1)
 
-	assertBool(t, isValidMove, false)
+	assert.Equal(t, isValidMove, false)
 }
 
 func TestGame_IsValidMove_SquareAlreadyOccupied(t *testing.T) {
@@ -131,7 +134,7 @@ func TestGame_IsValidMove_SquareAlreadyOccupied(t *testing.T) {
 
 	isValidMove := game.IsValidMove(0)
 
-	assertBool(t, isValidMove, false)
+	assert.Equal(t, isValidMove, false)
 }
 
 func TestGame_IsBoardFull_BoardFull(t *testing.T) {
@@ -145,7 +148,7 @@ func TestGame_IsBoardFull_BoardFull(t *testing.T) {
 
 	isDraw := game.IsDraw()
 
-	assertBool(t, isDraw, true)
+	assert.Equal(t, isDraw, true)
 }
 
 func TestGame_IsBoardFull_BoardNotFull(t *testing.T) {
@@ -159,7 +162,7 @@ func TestGame_IsBoardFull_BoardNotFull(t *testing.T) {
 
 	isDraw := game.IsDraw()
 
-	assertBool(t, isDraw, false)
+	assert.Equal(t, isDraw, false)
 }
 
 func TestGame_IsDraw_BoardFull(t *testing.T) {
@@ -173,7 +176,7 @@ func TestGame_IsDraw_BoardFull(t *testing.T) {
 
 	isDraw := game.IsDraw()
 
-	assertBool(t, isDraw, true)
+	assert.Equal(t, isDraw, true)
 }
 
 func TestGame_IsDraw_BoardNotFull(t *testing.T) {
@@ -187,7 +190,7 @@ func TestGame_IsDraw_BoardNotFull(t *testing.T) {
 
 	isDraw := game.IsDraw()
 
-	assertBool(t, isDraw, false)
+	assert.Equal(t, isDraw, false)
 }
 
 func TestGame_IsDraw_IsWin(t *testing.T) {
@@ -201,17 +204,5 @@ func TestGame_IsDraw_IsWin(t *testing.T) {
 
 	isDraw := game.IsDraw()
 
-	assertBool(t, isDraw, false)
-}
-
-func assertBool(t *testing.T, actual bool, expected bool) {
-	if actual != expected {
-		t.Errorf("Result was incorrect, got %t, should be: %t.", actual, expected)
-	}
-}
-
-func assertPiece(t *testing.T, actual Piece, expected Piece) {
-	if actual != expected {
-		t.Errorf("Result was incorrect, got %s, should be: %s.", actual, expected)
-	}
+	assert.Equal(t, isDraw, false)
 }
