@@ -1,78 +1,31 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"unicode"
+	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
+	"jakebaum.uk/tictactoe/controllers"
 )
 
-type parseError struct {
-	message string
-}
-
-func (p parseError) Error() string {
-	return p.message
-}
-
 func main() {
-	b := [][]Piece{
-		{EMPTY, EMPTY, EMPTY},
-		{EMPTY, EMPTY, EMPTY},
-		{EMPTY, EMPTY, EMPTY},
-	}
+	router := gin.Default()
 
-	fmt.Println("Welcome to tic-tac-toe!")
+	apiGroup := router.Group("/api")
+	{
+		gamesGroup := apiGroup.Group("/game")
+		{
+			gamesGroup.POST("", controllers.StartGame)
 
-	turn, numberOfTurns := X, 0
-	for {
-		Print(b)
-		fmt.Printf("It's %s's turn.  Which square would you like to select?  ", turn)
-		reader := bufio.NewReader(os.Stdin)
-
-		text, _ := reader.ReadString('\n')
-
-		square, err := getSquare(text)
-
-		if err != nil {
-			fmt.Printf("%s is not a valid input.\n", text)
-			continue
-		}
-
-		fmt.Printf("You have selected square %d.\n", square)
-
-		if !IsValidMove(b, square) {
-			fmt.Printf("%d is not a valid square.\n", square)
-			continue
-		}
-
-		b[square/3][square%3] = turn
-		isWinner, winner := IsWinner(b)
-		if isWinner {
-			Print(b)
-			fmt.Printf("Congratulations %s! You have won the game!\n", winner)
-			break
-		}
-
-		if turn == X {
-			turn = O
-		} else {
-			turn = X
-		}
-		numberOfTurns++
-
-		if numberOfTurns >= 9 {
-			Print(b)
-			fmt.Println("It's a draw!")
-			break
+			gameGroup := gamesGroup.Group("/:gameId")
+			{
+				gameGroup.GET("", controllers.GetGame)
+				gameGroup.POST("/move", controllers.MakeMove)
+			}
 		}
 	}
-}
 
-func getSquare(s string) (int, error) {
-	if !unicode.IsDigit(rune(s[0])) {
-		return -1, &parseError{"string"}
+	err := router.Run("localhost:8080")
+	if err != nil {
+		log.Error("An error occurred when trying to start server: ", err)
+		return
 	}
-
-	return int(s[0]) - 48, nil
 }
