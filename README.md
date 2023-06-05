@@ -1,14 +1,5 @@
-# Useful Commands
+# tic-tac-toe
 
-## Go
+This is a learning project for Go, AWS and Pulumi.  
 
-### Build for linux environment (Lambda) 
-`$env:GOOS = "linux"`
-
-`$env:GOARCH = "amd64"`
-
-`$env:CGO_ENABLED = "0"`
-
-`go build -o bin/handlers/games_handler /handlers/games_handler`
-
-`../../../../bin/build-lambda-zip.exe -o bin/handlers/games_handler.zip bin/handlers/games_handler`
+It is a simple tic-tac-toe game, hosted serverless with AWS lambdas, with infrastructure being provisioned through Pulumi.
