@@ -7,9 +7,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
+	"os"
 )
 
-const tableName = "game-0d0145f"
+var tableName = os.Getenv("TABLE_NAME")
 
 var svc = createClient()
 

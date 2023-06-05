@@ -12,12 +12,15 @@ import (
 
 const BASE_PATH = "/api"
 
-func createLambda(ctx *pulumi.Context, name string, role *iam.Role) (*lambda.Function, error) {
+func createLambda(ctx *pulumi.Context, name string, role *iam.Role, environment pulumi.StringMap) (*lambda.Function, error) {
 	return lambda.NewFunction(ctx, name, &lambda.FunctionArgs{
 		Runtime: pulumi.String("go1.x"),
 		Handler: pulumi.String("main"),
 		Role:    role.Arn,
 		Code:    pulumi.NewFileArchive(fmt.Sprintf("../bin/lambda/%s/main.zip", name)),
+		Environment: lambda.FunctionEnvironmentArgs{
+			Variables: environment,
+		},
 	})
 }
 
@@ -40,7 +43,7 @@ func main() {
 			return err
 		}
 
-		database, err := dynamodb.NewTable(ctx, "game", &dynamodb.TableArgs{
+		gameTable, err := dynamodb.NewTable(ctx, "game", &dynamodb.TableArgs{
 			Attributes: dynamodb.TableAttributeArray{
 				&dynamodb.TableAttributeArgs{
 					Name: pulumi.String("Id"),
@@ -55,7 +58,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		ctx.Export("Database name", database.Name)
+		ctx.Export("Database name", gameTable.Name)
 
 		role, err := iam.NewRole(ctx, "role", &iam.RoleArgs{
 			AssumeRolePolicy: pulumi.String(policy),
@@ -68,12 +71,12 @@ func main() {
 			return err
 		}
 
-		gamesHandlerFunction, err := createLambda(ctx, "games", role)
+		gamesHandlerFunction, err := createLambda(ctx, "games", role, pulumi.StringMap{"TABLE_NAME": gameTable.Name})
 		if err != nil {
 			return err
 		}
 
-		gameHandlerFunction, err := createLambda(ctx, "game", role)
+		gameHandlerFunction, err := createLambda(ctx, "game", role, pulumi.StringMap{"TABLE_NAME": gameTable.Name})
 		if err != nil {
 			return err
 		}
