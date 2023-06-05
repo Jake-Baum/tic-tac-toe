@@ -1,6 +1,9 @@
 package game
 
-import "fmt"
+import (
+	"fmt"
+	"unicode"
+)
 
 type Piece string
 
@@ -11,14 +14,13 @@ const (
 )
 
 type Game struct {
-	Id          int
+	Id          string
 	Board       [][]Piece
 	CurrentTurn Piece
 }
 
-func NewGame(id int) *Game {
+func NewGame() *Game {
 	return &Game{
-		Id: id,
 		Board: [][]Piece{
 			{EMPTY, EMPTY, EMPTY},
 			{EMPTY, EMPTY, EMPTY},
@@ -121,4 +123,38 @@ func areItemsInArrayEqual(arr []Piece) bool {
 		}
 	}
 	return true
+}
+
+func (game Game) Serialize() string {
+	var serialized string
+	for _, row := range game.Board {
+		for _, cell := range row {
+			serialized += string(cell)
+		}
+	}
+	return serialized
+}
+
+func Deserialize(id string, state string, currentTurn string) Game {
+	return Game{
+		Id:          id,
+		Board:       deserializeState(state),
+		CurrentTurn: Piece(currentTurn),
+	}
+}
+
+func deserializeState(state string) [][]Piece {
+	return [][]Piece{
+		{Piece(state[0]), Piece(state[1]), Piece(state[2])},
+		{Piece(state[3]), Piece(state[4]), Piece(state[5])},
+		{Piece(state[6]), Piece(state[7]), Piece(state[8])},
+	}
+}
+
+func GetSquare(s string) (int, error) {
+	if len(s) <= 0 || !unicode.IsDigit(rune(s[0])) {
+		return -1, fmt.Errorf("%s is not a valid move selection", s)
+	}
+
+	return int(s[0]) - 48, nil
 }

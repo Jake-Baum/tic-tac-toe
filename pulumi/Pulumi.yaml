@@ -1,0 +1,3 @@
+name: tic-tac-toe
+runtime: go
+description: A simply tic-tac-toe game
