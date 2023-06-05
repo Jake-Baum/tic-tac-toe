@@ -15,9 +15,9 @@ const BASE_PATH = "/api"
 func createLambda(ctx *pulumi.Context, name string, role *iam.Role) (*lambda.Function, error) {
 	return lambda.NewFunction(ctx, name, &lambda.FunctionArgs{
 		Runtime: pulumi.String("go1.x"),
-		Handler: pulumi.String(name),
+		Handler: pulumi.String("main"),
 		Role:    role.Arn,
-		Code:    pulumi.NewFileArchive(fmt.Sprintf("../bin/handlers/%s.zip", name)),
+		Code:    pulumi.NewFileArchive(fmt.Sprintf("../bin/lambda/%s/main.zip", name)),
 	})
 }
 
@@ -68,12 +68,12 @@ func main() {
 			return err
 		}
 
-		gamesHandlerFunction, err := createLambda(ctx, "games_handler", role)
+		gamesHandlerFunction, err := createLambda(ctx, "games", role)
 		if err != nil {
 			return err
 		}
 
-		gameHandlerFunction, err := createLambda(ctx, "game_handler", role)
+		gameHandlerFunction, err := createLambda(ctx, "game", role)
 		if err != nil {
 			return err
 		}
