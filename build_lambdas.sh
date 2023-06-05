@@ -9,3 +9,10 @@ for directory in ./lambda/*/; do
   go build -o "./bin/$directory/main" "$directory"
   ../../../../bin/build-lambda-zip -o "./bin/$directory/main.zip" "./bin/$directory/main"
 done
+
+for i in "$@"; do
+  if [ "$i" = "--push" ]; then
+    (export GOOS="windows" && export GOARCH="amd64" && cd ./pulumi && pulumi up)
+    break
+  fi
+done

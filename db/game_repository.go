@@ -11,9 +11,9 @@ import (
 
 const tableName = "game-0d0145f"
 
-func CreateGame(g game.Game) (game.Game, error) {
-	svc := createClient()
+var svc = createClient()
 
+func CreateGame(g game.Game) (game.Game, error) {
 	id := uuid.New().String()
 	g.Id = id
 
@@ -34,8 +34,6 @@ func CreateGame(g game.Game) (game.Game, error) {
 }
 
 func GetGame(id string) (game.Game, error) {
-	svc := createClient()
-
 	g := game.Game{}
 
 	input := &dynamodb.GetItemInput{
@@ -64,8 +62,6 @@ func GetGame(id string) (game.Game, error) {
 }
 
 func UpdateGame(g game.Game) (game.Game, error) {
-	svc := createClient()
-
 	result, err := dynamodbattribute.MarshalMap(g)
 	if err != nil {
 		return game.Game{}, err
