@@ -10,7 +10,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-const BASE_PATH = "/api"
+const basePath = "/api"
 
 func createLambda(ctx *pulumi.Context, name string, role *iam.Role, environment pulumi.StringMap) (*lambda.Function, error) {
 	return lambda.NewFunction(ctx, name, &lambda.FunctionArgs{
@@ -21,6 +21,16 @@ func createLambda(ctx *pulumi.Context, name string, role *iam.Role, environment 
 		Environment: lambda.FunctionEnvironmentArgs{
 			Variables: environment,
 		},
+	})
+}
+
+func createDynamoTable(ctx *pulumi.Context, name string, attributes dynamodb.TableAttributeArray) (*dynamodb.Table, error) {
+	return dynamodb.NewTable(ctx, name, &dynamodb.TableArgs{
+		Attributes:    attributes,
+		BillingMode:   pulumi.String("PROVISIONED"),
+		HashKey:       pulumi.String("Id"),
+		ReadCapacity:  pulumi.Int(20),
+		WriteCapacity: pulumi.Int(20),
 	})
 }
 
@@ -43,28 +53,21 @@ func main() {
 			return err
 		}
 
-		gameTable, err := dynamodb.NewTable(ctx, "game", &dynamodb.TableArgs{
-			Attributes: dynamodb.TableAttributeArray{
-				&dynamodb.TableAttributeArgs{
-					Name: pulumi.String("Id"),
-					Type: pulumi.String("S"),
-				},
-			},
-			BillingMode:   pulumi.String("PROVISIONED"),
-			HashKey:       pulumi.String("Id"),
-			ReadCapacity:  pulumi.Int(20),
-			WriteCapacity: pulumi.Int(20),
-		})
-		if err != nil {
-			return err
-		}
-		ctx.Export("Database name", gameTable.Name)
-
 		role, err := iam.NewRole(ctx, "role", &iam.RoleArgs{
 			AssumeRolePolicy: pulumi.String(policy),
 			ManagedPolicyArns: pulumi.StringArray{
 				iam.ManagedPolicyAWSLambdaBasicExecutionRole,
 				iam.ManagedPolicyAmazonDynamoDBFullAccess,
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		gameTable, err := createDynamoTable(ctx, "game", dynamodb.TableAttributeArray{
+			&dynamodb.TableAttributeArgs{
+				Name: pulumi.String("Id"),
+				Type: pulumi.String("S"),
 			},
 		})
 		if err != nil {
@@ -85,8 +88,8 @@ func main() {
 		method := apigateway.MethodANY
 		api, err := apigateway.NewRestAPI(ctx, "api", &apigateway.RestAPIArgs{
 			Routes: []apigateway.RouteArgs{
-				{Path: BASE_PATH + "/game", Method: &method, EventHandler: gamesHandlerFunction},
-				{Path: BASE_PATH + "/game/{gameId}", Method: &method, EventHandler: gameHandlerFunction},
+				{Path: basePath + "/game", Method: &method, EventHandler: gamesHandlerFunction},
+				{Path: basePath + "/game/{gameId}", Method: &method, EventHandler: gameHandlerFunction},
 			},
 		})
 		if err != nil {
