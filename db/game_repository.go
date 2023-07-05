@@ -6,13 +6,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
 	"os"
 )
 
-var tableName = os.Getenv("TABLE_NAME")
-
-var svc = createClient()
+var gameTableName = os.Getenv("TABLE_NAME")
 
 func CreateGame(g game.Game) (game.Game, error) {
 	id := uuid.New().String()
@@ -24,7 +21,7 @@ func CreateGame(g game.Game) (game.Game, error) {
 	}
 
 	input := &dynamodb.PutItemInput{
-		TableName: aws.String(tableName),
+		TableName: aws.String(gameTableName),
 		Item:      result,
 	}
 	if _, err := svc.PutItem(input); err != nil {
@@ -38,19 +35,20 @@ func GetGame(id string) (game.Game, error) {
 	g := game.Game{}
 
 	input := &dynamodb.GetItemInput{
-		TableName: aws.String(tableName),
+		TableName: aws.String(gameTableName),
 		Key: map[string]*dynamodb.AttributeValue{
 			"Id": {
 				S: aws.String(id),
 			},
 		},
 	}
+
 	if result, err := svc.GetItem(input); err != nil {
 		return game.Game{}, err
 
 	} else if result.Item == nil {
 		return game.Game{}, &EntityDoesNotExistError{
-			entityType: "game",
+			entityType: gameTableName,
 			id:         id,
 		}
 
@@ -72,10 +70,9 @@ func UpdateGame(g game.Game) (game.Game, error) {
 		":Board":       result["Board"],
 		":CurrentTurn": result["CurrentTurn"],
 	}
-	log.Info(expressionAttributeValues)
 
 	input := &dynamodb.UpdateItemInput{
-		TableName:                 aws.String(tableName),
+		TableName:                 aws.String(gameTableName),
 		ExpressionAttributeValues: expressionAttributeValues,
 		Key: map[string]*dynamodb.AttributeValue{
 			"Id": {

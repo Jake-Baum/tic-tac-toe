@@ -6,6 +6,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
+var svc = createClient()
+
 type EntityDoesNotExistError struct {
 	entityType string
 	id         string

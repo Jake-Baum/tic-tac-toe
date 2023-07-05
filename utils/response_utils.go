@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-func messageResponseJson(message string) string {
+func MessageResponseJson(message string) string {
 	return fmt.Sprintf("{\"message\": \"%s\"}", message)
 }
 
@@ -30,7 +30,7 @@ func BadRequestResponse(message string) events.APIGatewayProxyResponse {
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusBadRequest,
 		Headers:    defaultHeaders,
-		Body:       messageResponseJson(message),
+		Body:       MessageResponseJson(message),
 	}
 }
 
@@ -38,7 +38,7 @@ func NotFoundResponse(err db.EntityDoesNotExistError) events.APIGatewayProxyResp
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusNotFound,
 		Headers:    defaultHeaders,
-		Body:       messageResponseJson(err.Error()),
+		Body:       MessageResponseJson(err.Error()),
 	}
 }
 
@@ -53,14 +53,14 @@ func ConflictResponse(message string) events.APIGatewayProxyResponse {
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusConflict,
 		Headers:    defaultHeaders,
-		Body:       messageResponseJson(message),
+		Body:       MessageResponseJson(message),
 	}
 }
 
 func InternalServerErrorResponse() events.APIGatewayProxyResponse {
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusInternalServerError,
-		Body:       messageResponseJson("An unexpected error occurred"),
+		Body:       MessageResponseJson("An unexpected error occurred"),
 		Headers:    defaultHeaders,
 	}
 }
