@@ -22,7 +22,7 @@ func connect(ctx context.Context, websocketEvent events.APIGatewayWebsocketProxy
 	callbackUrl := fmt.Sprintf("wss://%s/%s", websocketEvent.RequestContext.DomainName, websocketEvent.RequestContext.Stage)
 
 	if _, err := db.CreateConnection(connectionId); err != nil {
-		log.Errorf("An error occurred while creating connection with ID %s", connectionId)
+		log.Errorf("An error occurred while creating connection with ID %s - %s", connectionId, err)
 		return utils.InternalServerErrorResponse(), nil
 	}
 
