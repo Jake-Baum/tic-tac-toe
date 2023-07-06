@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws"
-	"time"
-
 	//"github.com/pulumi/pulumi-aws-apigateway/sdk/go/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/apigatewayv2"
@@ -250,11 +248,21 @@ func main() {
 			return err
 		}
 
+		sendMessageFunction, err := createLambda(ctx, "send-message", lambdaRole, websocket, pulumi.StringMap{
+			"TABLE_NAME": connectionTable.Name,
+			"REGION":     pulumi.String(region.Name),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = createWebsocketRoute(ctx, "send-message", websocket, "send-message", sendMessageFunction)
+		if err != nil {
+			return err
+		}
+
 		websocketDeployment, err := apigatewayv2.NewDeployment(ctx, "websocketDeployment", &apigatewayv2.DeploymentArgs{
 			ApiId: websocket.ID(),
-			Triggers: pulumi.StringMap{
-				"deployedAt": pulumi.String(time.Now().Format(time.RFC3339)), //TODO(Jake): Currently this redeploys API every time, might be a better way
-			},
 		}, pulumi.DependsOn([]pulumi.Resource{connectRoute, defaultRoute}))
 		if err != nil {
 			return err
@@ -275,22 +283,6 @@ func main() {
 				ThrottlingRateLimit:    pulumi.Float64(100),
 			},
 		})
-		if err != nil {
-			return err
-		}
-
-		sendMessageFunction, err := createLambda(ctx, "send-message", lambdaRole, websocket, pulumi.StringMap{
-			"TABLE_NAME": connectionTable.Name,
-			"API_GATEWAY_ENDPOINT": pulumi.All(stage.ApiId, region.Name, stage.Name).ApplyT(func(args []interface{}) (string, error) {
-				return fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s", args[0], args[1], args[2]), nil
-			}).(pulumi.StringOutput),
-			"REGION": pulumi.String(region.Name),
-		})
-		if err != nil {
-			return err
-		}
-
-		_, err = createWebsocketRoute(ctx, "send-message", websocket, "send-message", sendMessageFunction)
 		if err != nil {
 			return err
 		}

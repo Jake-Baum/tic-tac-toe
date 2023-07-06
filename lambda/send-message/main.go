@@ -29,7 +29,7 @@ func sendMessage(ctx context.Context, websocketEvent events.APIGatewayWebsocketP
 		return utils.InternalServerErrorResponse(), nil
 	}
 
-	apiGatewaySession, err := utils.NewApiGatewaySession()
+	apiGatewaySession, err := utils.NewApiGatewaySession(websocketEvent)
 	if err != nil {
 		log.Errorf("An error occurred when creating API Gateway session - %s", err)
 		return utils.InternalServerErrorResponse(), nil
