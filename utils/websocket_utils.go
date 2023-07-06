@@ -7,6 +7,11 @@ import (
 	"os"
 )
 
+type Request struct {
+	Action    string `json:"action"`
+	MessageTo string `json:"messageTo"`
+}
+
 var apiGatewayEndpoint = os.Getenv("API_GATEWAY_ENDPOINT")
 var region = os.Getenv("REGION")
 

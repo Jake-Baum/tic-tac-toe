@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Jake-Baum/tic-tac-toe/db"
-	. "github.com/Jake-Baum/tic-tac-toe/lambda"
 	"github.com/Jake-Baum/tic-tac-toe/utils"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -14,14 +13,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Request struct {
-	MessageTo string `json:"messageTo"`
-}
-
 func sendMessage(ctx context.Context, websocketEvent events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	connectionId := websocketEvent.RequestContext.ConnectionID
 
-	var requestBody Request
+	var requestBody utils.Request
 	err := json.Unmarshal([]byte(websocketEvent.Body), &requestBody)
 	if err != nil {
 		log.Errorf("An error occurred while deserialising request body %s - %s", websocketEvent.Body, err)
@@ -54,6 +49,6 @@ func sendMessage(ctx context.Context, websocketEvent events.APIGatewayWebsocketP
 }
 
 func main() {
-	Initialize()
+	utils.Initialize()
 	lambda.Start(sendMessage)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws"
+	"time"
 
 	//"github.com/pulumi/pulumi-aws-apigateway/sdk/go/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/apigateway"
@@ -17,8 +18,8 @@ import (
 
 const basePath = "/api"
 
-func createLambda(ctx *pulumi.Context, name string, role *iam.Role, environment pulumi.StringMap) (*lambda.Function, error) {
-	return lambda.NewFunction(ctx, name, &lambda.FunctionArgs{
+func createLambda(ctx *pulumi.Context, name string, role *iam.Role, api *apigatewayv2.Api, environment pulumi.StringMap) (*lambda.Function, error) {
+	lambdaFunction, err := lambda.NewFunction(ctx, name, &lambda.FunctionArgs{
 		Runtime: pulumi.String("go1.x"),
 		Handler: pulumi.String("main"),
 		Role:    role.Arn,
@@ -27,6 +28,23 @@ func createLambda(ctx *pulumi.Context, name string, role *iam.Role, environment 
 			Variables: environment,
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = lambda.NewPermission(ctx, name, &lambda.PermissionArgs{
+		Action:    pulumi.String("lambda:InvokeFunction"),
+		Function:  lambdaFunction.Name,
+		Principal: pulumi.String("apigateway.amazonaws.com"),
+		SourceArn: api.ExecutionArn.ApplyT(func(executionArn string) (string, error) {
+			return fmt.Sprintf("%v/*", executionArn), nil
+		}).(pulumi.StringOutput),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return lambdaFunction, nil
 }
 
 func createDynamoTable(ctx *pulumi.Context, name string, attributes dynamodb.TableAttributeArray, isTtlEnabled bool) (*dynamodb.Table, error) {
@@ -47,6 +65,58 @@ func createDynamoTable(ctx *pulumi.Context, name string, attributes dynamodb.Tab
 		WriteCapacity: pulumi.Int(20),
 		Ttl:           ttl,
 	})
+}
+
+func createApiGatewayWebsocket(ctx *pulumi.Context, name string) (*apigatewayv2.Api, error) {
+	websocket, err := apigatewayv2.NewApi(ctx, name, &apigatewayv2.ApiArgs{
+		ProtocolType:             pulumi.String("WEBSOCKET"),
+		RouteSelectionExpression: pulumi.String("$request.body.action"),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return websocket, nil
+}
+
+func createWebsocketRoute(ctx *pulumi.Context, name string, gatewayApi *apigatewayv2.Api, routeKey string, lambdaFunction *lambda.Function) (*apigatewayv2.Route, error) {
+
+	integration, err := apigatewayv2.NewIntegration(ctx, name, &apigatewayv2.IntegrationArgs{
+		ApiId:                   gatewayApi.ID(),
+		IntegrationType:         pulumi.String("AWS_PROXY"),
+		ConnectionType:          pulumi.String("INTERNET"),
+		ContentHandlingStrategy: pulumi.String("CONVERT_TO_TEXT"),
+		IntegrationMethod:       pulumi.String("POST"),
+		IntegrationUri:          lambdaFunction.InvokeArn,
+		PassthroughBehavior:     pulumi.String("WHEN_NO_MATCH"),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	route, err := apigatewayv2.NewRoute(ctx, name, &apigatewayv2.RouteArgs{
+		ApiId:                            gatewayApi.ID(),
+		RouteKey:                         pulumi.String(routeKey),
+		AuthorizationType:                pulumi.String("NONE"),
+		RouteResponseSelectionExpression: pulumi.String("$default"),
+		Target: integration.ID().ApplyT(func(id string) (string, error) {
+			return fmt.Sprintf("integrations/%v", id), nil
+		}).(pulumi.StringOutput),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = apigatewayv2.NewRouteResponse(ctx, name, &apigatewayv2.RouteResponseArgs{
+		RouteId:          route.ID(),
+		ApiId:            gatewayApi.ID(),
+		RouteResponseKey: pulumi.String("$default"),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return route, nil
 }
 
 func main() {
@@ -156,17 +226,36 @@ func main() {
 			return err
 		}
 
-		websocket, err := apigatewayv2.NewApi(ctx, "connect", &apigatewayv2.ApiArgs{
-			ProtocolType:             pulumi.String("WEBSOCKET"),
-			RouteSelectionExpression: pulumi.String("$request.body.action"),
+		websocket, err := createApiGatewayWebsocket(ctx, "websocket")
+
+		connectFunction, err := createLambda(ctx, "connect", lambdaRole, websocket, pulumi.StringMap{
+			"TABLE_NAME": connectionTable.Name,
 		})
+		if err != nil {
+			return err
+		}
+
+		connectRoute, err := createWebsocketRoute(ctx, "connect", websocket, "$connect", connectFunction)
+		if err != nil {
+			return err
+		}
+
+		defaultFunction, err := createLambda(ctx, "ws-fallback", lambdaRole, websocket, nil)
+		if err != nil {
+			return err
+		}
+
+		defaultRoute, err := createWebsocketRoute(ctx, "default", websocket, "$default", defaultFunction)
 		if err != nil {
 			return err
 		}
 
 		websocketDeployment, err := apigatewayv2.NewDeployment(ctx, "websocketDeployment", &apigatewayv2.DeploymentArgs{
 			ApiId: websocket.ID(),
-		})
+			Triggers: pulumi.StringMap{
+				"deployedAt": pulumi.String(time.Now().Format(time.RFC3339)), //TODO(Jake): Currently this redeploys API every time, might be a better way
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{connectRoute, defaultRoute}))
 		if err != nil {
 			return err
 		}
@@ -190,59 +279,7 @@ func main() {
 			return err
 		}
 
-		connectFunction, err := createLambda(ctx, "connect", lambdaRole, pulumi.StringMap{"TABLE_NAME": connectionTable.Name})
-		if err != nil {
-			return err
-		}
-
-		_, err = lambda.NewPermission(ctx, "connectInvokePermission", &lambda.PermissionArgs{
-			Action:    pulumi.String("lambda:InvokeFunction"),
-			Function:  connectFunction.Name,
-			Principal: pulumi.String("apigateway.amazonaws.com"),
-			SourceArn: websocket.ExecutionArn.ApplyT(func(executionArn string) (string, error) {
-				return fmt.Sprintf("%v/*", executionArn), nil
-			}).(pulumi.StringOutput),
-		})
-		if err != nil {
-			return err
-		}
-
-		connectIntegration, err := apigatewayv2.NewIntegration(ctx, "connectIntegration", &apigatewayv2.IntegrationArgs{
-			ApiId:                   websocket.ID(),
-			IntegrationType:         pulumi.String("AWS_PROXY"),
-			ConnectionType:          pulumi.String("INTERNET"),
-			ContentHandlingStrategy: pulumi.String("CONVERT_TO_TEXT"),
-			IntegrationMethod:       pulumi.String("POST"),
-			IntegrationUri:          connectFunction.InvokeArn,
-			PassthroughBehavior:     pulumi.String("WHEN_NO_MATCH"),
-		})
-		if err != nil {
-			return err
-		}
-
-		connectRoute, err := apigatewayv2.NewRoute(ctx, "connectRoute", &apigatewayv2.RouteArgs{
-			ApiId:                            websocket.ID(),
-			RouteKey:                         pulumi.String("$connect"),
-			AuthorizationType:                pulumi.String("NONE"),
-			RouteResponseSelectionExpression: pulumi.String("$default"),
-			Target: connectIntegration.ID().ApplyT(func(id string) (string, error) {
-				return fmt.Sprintf("integrations/%v", id), nil
-			}).(pulumi.StringOutput),
-		})
-		if err != nil {
-			return err
-		}
-
-		_, err = apigatewayv2.NewRouteResponse(ctx, "connectRouteResponse", &apigatewayv2.RouteResponseArgs{
-			RouteId:          connectRoute.ID(),
-			ApiId:            websocket.ID(),
-			RouteResponseKey: pulumi.String("$default"),
-		})
-		if err != nil {
-			return err
-		}
-
-		sendMessageFunction, err := createLambda(ctx, "send-message", lambdaRole, pulumi.StringMap{
+		sendMessageFunction, err := createLambda(ctx, "send-message", lambdaRole, websocket, pulumi.StringMap{
 			"TABLE_NAME": connectionTable.Name,
 			"API_GATEWAY_ENDPOINT": pulumi.All(stage.ApiId, region.Name, stage.Name).ApplyT(func(args []interface{}) (string, error) {
 				return fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s", args[0], args[1], args[2]), nil
@@ -253,49 +290,7 @@ func main() {
 			return err
 		}
 
-		_, err = lambda.NewPermission(ctx, "sendMessageInvokePermission", &lambda.PermissionArgs{
-			Action:    pulumi.String("lambda:InvokeFunction"),
-			Function:  sendMessageFunction.Name,
-			Principal: pulumi.String("apigateway.amazonaws.com"),
-			SourceArn: websocket.ExecutionArn.ApplyT(func(executionArn string) (string, error) {
-				return fmt.Sprintf("%v/*", executionArn), nil
-			}).(pulumi.StringOutput),
-		})
-		if err != nil {
-			return err
-		}
-
-		sendMessageIntegration, err := apigatewayv2.NewIntegration(ctx, "sendMessageIntegration", &apigatewayv2.IntegrationArgs{
-			ApiId:                   websocket.ID(),
-			IntegrationType:         pulumi.String("AWS_PROXY"),
-			ConnectionType:          pulumi.String("INTERNET"),
-			ContentHandlingStrategy: pulumi.String("CONVERT_TO_TEXT"),
-			IntegrationMethod:       pulumi.String("POST"),
-			IntegrationUri:          sendMessageFunction.InvokeArn,
-			PassthroughBehavior:     pulumi.String("WHEN_NO_MATCH"),
-		})
-		if err != nil {
-			return err
-		}
-
-		sendMessageRoute, err := apigatewayv2.NewRoute(ctx, "sendMessageRoute", &apigatewayv2.RouteArgs{
-			ApiId:                            websocket.ID(),
-			RouteKey:                         pulumi.String("$default"),
-			AuthorizationType:                pulumi.String("NONE"),
-			RouteResponseSelectionExpression: pulumi.String("$default"),
-			Target: sendMessageIntegration.ID().ApplyT(func(id string) (string, error) {
-				return fmt.Sprintf("integrations/%v", id), nil
-			}).(pulumi.StringOutput),
-		})
-		if err != nil {
-			return err
-		}
-
-		_, err = apigatewayv2.NewRouteResponse(ctx, "sendMessageRouteResponse", &apigatewayv2.RouteResponseArgs{
-			RouteId:          sendMessageRoute.ID(),
-			ApiId:            websocket.ID(),
-			RouteResponseKey: pulumi.String("$default"),
-		})
+		_, err = createWebsocketRoute(ctx, "send-message", websocket, "send-message", sendMessageFunction)
 		if err != nil {
 			return err
 		}

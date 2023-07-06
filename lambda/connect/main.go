@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Jake-Baum/tic-tac-toe/db"
-	. "github.com/Jake-Baum/tic-tac-toe/lambda"
 	"github.com/Jake-Baum/tic-tac-toe/utils"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -30,6 +29,6 @@ func connect(ctx context.Context, websocketEvent events.APIGatewayWebsocketProxy
 }
 
 func main() {
-	Initialize()
+	utils.Initialize()
 	lambda.Start(connect)
 }

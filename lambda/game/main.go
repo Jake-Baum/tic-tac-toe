@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/Jake-Baum/tic-tac-toe/db"
 	"github.com/Jake-Baum/tic-tac-toe/game"
-	. "github.com/Jake-Baum/tic-tac-toe/lambda"
 	"github.com/Jake-Baum/tic-tac-toe/utils"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -92,6 +91,6 @@ func handleGameHandlerRequest(request events.APIGatewayProxyRequest) (events.API
 }
 
 func main() {
-	Initialize()
+	utils.Initialize()
 	lambda.Start(handleGameHandlerRequest)
 }
