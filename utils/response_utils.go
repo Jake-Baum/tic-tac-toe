@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -21,6 +22,7 @@ func OkResponse(responseBody interface{}) events.APIGatewayProxyResponse {
 			Body:       string(responseBodySerialized),
 		}
 	} else {
+		log.Errorf("An error occurred when serialising response (%s) to JSON - %s", responseBody, err)
 		return InternalServerErrorResponse()
 	}
 }
@@ -30,6 +32,14 @@ func BadRequestResponse(message string) events.APIGatewayProxyResponse {
 		StatusCode: http.StatusBadRequest,
 		Headers:    defaultHeaders,
 		Body:       MessageResponseJson(message),
+	}
+}
+
+func ForbiddenResponse() events.APIGatewayProxyResponse {
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusForbidden,
+		Headers:    defaultHeaders,
+		Body:       MessageResponseJson("You are not allowed to access this resource"),
 	}
 }
 

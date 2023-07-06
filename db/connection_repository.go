@@ -13,7 +13,7 @@ type Connection struct {
 	Ttl int64
 }
 
-var connectionTableName = os.Getenv("TABLE_NAME")
+var connectionTableName = os.Getenv("CONNECTION_TABLE_NAME")
 
 func CreateConnection(id string) (Connection, error) {
 

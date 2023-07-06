@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-var gameTableName = os.Getenv("TABLE_NAME")
+var gameTableName = os.Getenv("GAME_TABLE_NAME")
 
 func CreateGame(g game.Game) (game.Game, error) {
 	id := uuid.New().String()

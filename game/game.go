@@ -2,10 +2,45 @@ package game
 
 import (
 	"fmt"
-	"unicode"
 )
 
 type Piece string
+
+type FinishedError struct {
+	winner *Piece
+}
+
+func (e *FinishedError) Error() string {
+	if e.winner != nil {
+		return fmt.Sprintf("Game has finished. The winner is %s!", *e.winner)
+	}
+	return "Game has ended in a draw"
+}
+
+type InvalidMoveError struct {
+	move int
+}
+
+func (e *InvalidMoveError) Error() string {
+	return fmt.Sprintf("%d is not a valid move", e.move)
+}
+
+type NotPlayersTurnError struct {
+	player string
+}
+
+func (e *NotPlayersTurnError) Error() string {
+	return fmt.Sprintf("It is not %s's turn", e.player)
+}
+
+type PlayerDoesNotExistError struct {
+	player string
+	gameId string
+}
+
+func (e *PlayerDoesNotExistError) Error() string {
+	return fmt.Sprintf("User %s is not permitted to make moves in game %s", e.player, e.gameId)
+}
 
 const (
 	X     Piece = "X"
@@ -17,9 +52,11 @@ type Game struct {
 	Id          string
 	Board       [][]Piece
 	CurrentTurn Piece
+	PlayerX     string
+	PlayerO     string
 }
 
-func NewGame() *Game {
+func NewGame(playerX string, playerO string) *Game {
 	return &Game{
 		Board: [][]Piece{
 			{EMPTY, EMPTY, EMPTY},
@@ -27,7 +64,57 @@ func NewGame() *Game {
 			{EMPTY, EMPTY, EMPTY},
 		},
 		CurrentTurn: X,
+		PlayerX:     playerX,
+		PlayerO:     playerO,
 	}
+}
+
+func (game Game) MakeMove(player string, move int) error {
+	if !game.IsPlayer(player) {
+		return &PlayerDoesNotExistError{
+			player: player,
+			gameId: game.Id,
+		}
+	}
+
+	if game.IsDraw() {
+		return &FinishedError{}
+	}
+	if isWinner, winner := game.IsWinner(); isWinner {
+		return &FinishedError{winner: &winner}
+	}
+
+	if !game.IsValidMove(move) {
+		return &InvalidMoveError{move: move}
+	}
+
+	if (game.CurrentTurn == X && player != game.PlayerX) || (game.CurrentTurn == O && player != game.PlayerO) {
+		return &NotPlayersTurnError{player: player}
+	}
+
+	game.Board[move/3][move%3] = game.CurrentTurn
+
+	if game.CurrentTurn == X {
+		game.CurrentTurn = O
+	} else {
+		game.CurrentTurn = X
+	}
+
+	return nil
+}
+
+func (game Game) IsPlayer(player string) bool {
+	if game.PlayerX == player || game.PlayerO == player {
+		return true
+	}
+	return false
+}
+
+func (game Game) GetOtherPlayer(player string) string {
+	if game.PlayerX == player {
+		return game.PlayerO
+	}
+	return game.PlayerX
 }
 
 func (game Game) IsWinner() (bool, Piece) {
@@ -105,17 +192,6 @@ func (game Game) IsValidMove(square int) bool {
 	return true
 }
 
-func (game Game) Print() {
-
-	for _, row := range game.Board {
-		for _, cell := range row {
-			fmt.Print(cell)
-		}
-
-		fmt.Println()
-	}
-}
-
 func areItemsInArrayEqual(arr []Piece) bool {
 	for _, item := range arr {
 		if item != arr[0] {
@@ -133,28 +209,4 @@ func (game Game) Serialize() string {
 		}
 	}
 	return serialized
-}
-
-func Deserialize(id string, state string, currentTurn string) Game {
-	return Game{
-		Id:          id,
-		Board:       deserializeState(state),
-		CurrentTurn: Piece(currentTurn),
-	}
-}
-
-func deserializeState(state string) [][]Piece {
-	return [][]Piece{
-		{Piece(state[0]), Piece(state[1]), Piece(state[2])},
-		{Piece(state[3]), Piece(state[4]), Piece(state[5])},
-		{Piece(state[6]), Piece(state[7]), Piece(state[8])},
-	}
-}
-
-func GetSquare(s string) (int, error) {
-	if len(s) <= 0 || !unicode.IsDigit(rune(s[0])) {
-		return -1, fmt.Errorf("%s is not a valid move selection", s)
-	}
-
-	return int(s[0]) - 48, nil
 }

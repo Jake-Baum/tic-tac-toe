@@ -8,8 +8,6 @@ import (
 	"github.com/Jake-Baum/tic-tac-toe/utils"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/apigatewaymanagementapi"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,36 +20,27 @@ func sendMessage(_ context.Context, websocketEvent events.APIGatewayWebsocketPro
 		log.Errorf("An error occurred while deserialising request body %s - %s", websocketEvent.Body, err)
 		return utils.InternalServerErrorResponse(), nil
 	}
+	messageTo := requestBody.MessageTo
 
-	_, err = db.GetConnection(requestBody.MessageTo)
+	_, err = db.GetConnection(messageTo)
 	if err != nil {
 		switch err.(type) {
 		case *db.EntityDoesNotExistError:
 			log.Info(err)
 			return utils.NotFoundResponse(err), nil
 		default:
-			log.Errorf("An error occurred while retrieving connection with ID %s - %s", requestBody.MessageTo, err)
+			log.Errorf("An error occurred while retrieving connection with ID %s - %s", messageTo, err)
 			return utils.InternalServerErrorResponse(), nil
 		}
 	}
 
-	apiGatewaySession, err := utils.NewApiGatewaySession(websocketEvent)
-	if err != nil {
-		log.Errorf("An error occurred when creating API Gateway session - %s", err)
+	message := utils.MessageResponseJson(fmt.Sprintf("Hi %s!  From %s", messageTo, connectionId))
+	if err = utils.SendMessage(websocketEvent, messageTo, message); err != nil {
+		log.Errorf("An error occurred when sending message from %s to %s - %s", connectionId, messageTo, err)
 		return utils.InternalServerErrorResponse(), nil
 	}
 
-	connectionInput := &apigatewaymanagementapi.PostToConnectionInput{
-		ConnectionId: aws.String(requestBody.MessageTo),
-		Data:         []byte(utils.MessageResponseJson(fmt.Sprintf("To %s.  From %s", requestBody.MessageTo, connectionId))),
-	}
-	_, err = apiGatewaySession.PostToConnection(connectionInput)
-	if err != nil {
-		log.Errorf("An error occurred when sending message from %s to %s - %s", connectionId, requestBody.MessageTo, err)
-		return utils.InternalServerErrorResponse(), nil
-	}
-
-	return utils.OkResponse(utils.MessageResponseJson(fmt.Sprintf("Message sent to %s", requestBody.MessageTo))), nil
+	return utils.OkResponse(utils.MessageResponseJson(fmt.Sprintf("Message sent to %s", messageTo))), nil
 }
 
 func main() {

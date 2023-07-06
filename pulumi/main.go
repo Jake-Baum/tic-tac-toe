@@ -183,39 +183,6 @@ func main() {
 			return nil
 		}
 
-		//gameTable, err := createDynamoTable(ctx, "game", dynamodb.TableAttributeArray{
-		//	&dynamodb.TableAttributeArgs{
-		//		Name: pulumi.String("Id"),
-		//		Type: pulumi.String("S"),
-		//	},
-		//}, false)
-		//if err != nil {
-		//	return err
-		//}
-
-		//gamesHandlerFunction, err := createLambda(ctx, "games", lambdaRole, pulumi.StringMap{"TABLE_NAME": gameTable.Name})
-		//if err != nil {
-		//	return err
-		//}
-		//
-		//gameHandlerFunction, err := createLambda(ctx, "game", lambdaRole, pulumi.StringMap{"TABLE_NAME": gameTable.Name})
-		//if err != nil {
-		//	return err
-		//}
-
-		//// A REST API to route requests to HTML content and the Lambda function
-		//apigateway.New
-		//method := apigateway.MethodANY
-		//api, err := apigateway.NewRestAPI(ctx, "api", &apigateway.RestAPIArgs{
-		//	Routes: []apigateway.RouteArgs{
-		//		{Path: basePath + "/game", Method: &method, EventHandler: gamesHandlerFunction},
-		//		{Path: basePath + "/game/{gameId}", Method: &method, EventHandler: gameHandlerFunction},
-		//	},
-		//})
-		//if err != nil {
-		//	return err
-		//}
-
 		connectionTable, err := createDynamoTable(ctx, "connection", dynamodb.TableAttributeArray{
 			&dynamodb.TableAttributeArgs{
 				Name: pulumi.String("Id"),
@@ -229,12 +196,11 @@ func main() {
 		websocket, err := createApiGatewayWebsocket(ctx, "websocket")
 
 		connectFunction, err := createLambda(ctx, "connect", lambdaRole, websocket, pulumi.StringMap{
-			"TABLE_NAME": connectionTable.Name,
+			"CONNECTION_TABLE_NAME": connectionTable.Name,
 		})
 		if err != nil {
 			return err
 		}
-
 		connectRoute, err := createWebsocketRoute(ctx, "connect", websocket, "$connect", connectFunction)
 		if err != nil {
 			return err
@@ -244,33 +210,73 @@ func main() {
 		if err != nil {
 			return err
 		}
-
 		defaultRoute, err := createWebsocketRoute(ctx, "default", websocket, "$default", defaultFunction)
 		if err != nil {
 			return err
 		}
 
 		disconnectFunction, err := createLambda(ctx, "disconnect", lambdaRole, websocket, pulumi.StringMap{
-			"TABLE_NAME": connectionTable.Name,
+			"CONNECTION_TABLE_NAME": connectionTable.Name,
 		})
 		if err != nil {
 			return err
 		}
-
 		disconnectRoute, err := createWebsocketRoute(ctx, "disconnect", websocket, "$disconnect", disconnectFunction)
 		if err != nil {
 			return err
 		}
 
 		sendMessageFunction, err := createLambda(ctx, "send-message", lambdaRole, websocket, pulumi.StringMap{
-			"TABLE_NAME": connectionTable.Name,
-			"REGION":     pulumi.String(region.Name),
+			"CONNECTION_TABLE_NAME": connectionTable.Name,
+			"REGION":                pulumi.String(region.Name),
 		})
 		if err != nil {
 			return err
 		}
-
 		sendMessageRoute, err := createWebsocketRoute(ctx, "send-message", websocket, "send-message", sendMessageFunction)
+		if err != nil {
+			return err
+		}
+
+		gameTable, err := createDynamoTable(ctx, "get-game", dynamodb.TableAttributeArray{
+			&dynamodb.TableAttributeArgs{
+				Name: pulumi.String("Id"),
+				Type: pulumi.String("S"),
+			},
+		}, false)
+		if err != nil {
+			return err
+		}
+
+		gameEnvironment := pulumi.StringMap{
+			"CONNECTION_TABLE_NAME": connectionTable.Name,
+			"GAME_TABLE_NAME":       gameTable.Name,
+			"REGION":                pulumi.String(region.Name),
+		}
+
+		createGameFunction, err := createLambda(ctx, "create-game", lambdaRole, websocket, gameEnvironment)
+		if err != nil {
+			return err
+		}
+		createGameRoute, err := createWebsocketRoute(ctx, "create-game", websocket, "create-game", createGameFunction)
+		if err != nil {
+			return err
+		}
+
+		getGameFunction, err := createLambda(ctx, "get-game", lambdaRole, websocket, gameEnvironment)
+		if err != nil {
+			return err
+		}
+		getGameRoute, err := createWebsocketRoute(ctx, "get-game", websocket, "get-game", getGameFunction)
+		if err != nil {
+			return err
+		}
+
+		makeMoveFunction, err := createLambda(ctx, "make-move", lambdaRole, websocket, gameEnvironment)
+		if err != nil {
+			return err
+		}
+		makeMoveRoute, err := createWebsocketRoute(ctx, "make-move", websocket, "make-move", makeMoveFunction)
 		if err != nil {
 			return err
 		}
@@ -280,7 +286,7 @@ func main() {
 			Triggers: pulumi.StringMap{
 				"deployedAt": pulumi.String(time.Now().Format(time.RFC3339)), // This is somewhat of a hack to force the API to redeploy on changes.  Must be a better way
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{connectRoute, defaultRoute, disconnectRoute, sendMessageRoute}))
+		}, pulumi.DependsOn([]pulumi.Resource{connectRoute, defaultRoute, disconnectRoute, sendMessageRoute, createGameRoute, getGameRoute, makeMoveRoute}))
 		if err != nil {
 			return err
 		}
