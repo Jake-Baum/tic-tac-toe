@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws"
+	"time"
+
 	//"github.com/pulumi/pulumi-aws-apigateway/sdk/go/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/apigatewayv2"
@@ -248,6 +250,18 @@ func main() {
 			return err
 		}
 
+		disconnectFunction, err := createLambda(ctx, "disconnect", lambdaRole, websocket, pulumi.StringMap{
+			"TABLE_NAME": connectionTable.Name,
+		})
+		if err != nil {
+			return err
+		}
+
+		disconnectRoute, err := createWebsocketRoute(ctx, "disconnect", websocket, "$disconnect", disconnectFunction)
+		if err != nil {
+			return err
+		}
+
 		sendMessageFunction, err := createLambda(ctx, "send-message", lambdaRole, websocket, pulumi.StringMap{
 			"TABLE_NAME": connectionTable.Name,
 			"REGION":     pulumi.String(region.Name),
@@ -256,14 +270,17 @@ func main() {
 			return err
 		}
 
-		_, err = createWebsocketRoute(ctx, "send-message", websocket, "send-message", sendMessageFunction)
+		sendMessageRoute, err := createWebsocketRoute(ctx, "send-message", websocket, "send-message", sendMessageFunction)
 		if err != nil {
 			return err
 		}
 
 		websocketDeployment, err := apigatewayv2.NewDeployment(ctx, "websocketDeployment", &apigatewayv2.DeploymentArgs{
 			ApiId: websocket.ID(),
-		}, pulumi.DependsOn([]pulumi.Resource{connectRoute, defaultRoute}))
+			Triggers: pulumi.StringMap{
+				"deployedAt": pulumi.String(time.Now().Format(time.RFC3339)), // This is somewhat of a hack to force the API to redeploy on changes.  Must be a better way
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{connectRoute, defaultRoute, disconnectRoute, sendMessageRoute}))
 		if err != nil {
 			return err
 		}

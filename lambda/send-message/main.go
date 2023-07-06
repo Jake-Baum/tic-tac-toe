@@ -13,7 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func sendMessage(ctx context.Context, websocketEvent events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
+func sendMessage(_ context.Context, websocketEvent events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	connectionId := websocketEvent.RequestContext.ConnectionID
 
 	var requestBody utils.Request
@@ -25,8 +25,14 @@ func sendMessage(ctx context.Context, websocketEvent events.APIGatewayWebsocketP
 
 	_, err = db.GetConnection(requestBody.MessageTo)
 	if err != nil {
-		log.Errorf("An error occurred while retrieving connection with ID %s - %s", requestBody.MessageTo, err)
-		return utils.InternalServerErrorResponse(), nil
+		switch err.(type) {
+		case *db.EntityDoesNotExistError:
+			log.Info(err)
+			return utils.NotFoundResponse(err), nil
+		default:
+			log.Errorf("An error occurred while retrieving connection with ID %s - %s", requestBody.MessageTo, err)
+			return utils.InternalServerErrorResponse(), nil
+		}
 	}
 
 	apiGatewaySession, err := utils.NewApiGatewaySession(websocketEvent)

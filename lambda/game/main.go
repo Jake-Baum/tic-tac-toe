@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"github.com/Jake-Baum/tic-tac-toe/db"
 	"github.com/Jake-Baum/tic-tac-toe/game"
@@ -17,10 +16,9 @@ func makeMove(id string, move string) events.APIGatewayProxyResponse {
 	if err != nil {
 		log.Error(err)
 
-		var entityDoesNotExistError *db.EntityDoesNotExistError
-		switch {
-		case errors.As(err, &entityDoesNotExistError):
-			return utils.NotFoundResponse(*entityDoesNotExistError)
+		switch err.(type) {
+		case *db.EntityDoesNotExistError:
+			return utils.NotFoundResponse(err)
 		default:
 			return utils.InternalServerErrorResponse()
 		}
@@ -62,10 +60,9 @@ func getGame(id string) events.APIGatewayProxyResponse {
 	if err != nil {
 		log.Error(err)
 
-		var entityDoesNotExistError *db.EntityDoesNotExistError
-		switch {
-		case errors.As(err, &entityDoesNotExistError):
-			return utils.NotFoundResponse(*entityDoesNotExistError)
+		switch err.(type) {
+		case *db.EntityDoesNotExistError:
+			return utils.NotFoundResponse(err)
 		default:
 			return utils.InternalServerErrorResponse()
 		}

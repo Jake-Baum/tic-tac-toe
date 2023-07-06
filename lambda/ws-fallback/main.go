@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func wsFallback(ctx context.Context, websocketEvent events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
+func wsFallback(_ context.Context, websocketEvent events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	var requestBody utils.Request
 	err := json.Unmarshal([]byte(websocketEvent.Body), &requestBody)
 	if err != nil {

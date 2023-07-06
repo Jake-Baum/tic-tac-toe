@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Jake-Baum/tic-tac-toe/db"
 	"github.com/aws/aws-lambda-go/events"
 	"net/http"
 )
@@ -34,7 +33,7 @@ func BadRequestResponse(message string) events.APIGatewayProxyResponse {
 	}
 }
 
-func NotFoundResponse(err db.EntityDoesNotExistError) events.APIGatewayProxyResponse {
+func NotFoundResponse(err error) events.APIGatewayProxyResponse {
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusNotFound,
 		Headers:    defaultHeaders,

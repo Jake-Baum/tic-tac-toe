@@ -68,6 +68,39 @@ func GetConnection(id string) (Connection, error) {
 	}
 }
 
+func DeleteConnection(id string) (Connection, error) {
+	input := &dynamodb.DeleteItemInput{
+		TableName: aws.String(connectionTableName),
+		Key: map[string]*dynamodb.AttributeValue{
+			"Id": {
+				S: aws.String(id),
+			},
+		},
+		ReturnValues: aws.String("ALL_OLD"),
+	}
+
+	c := Connection{}
+
+	result, err := svc.DeleteItem(input)
+	if err != nil {
+		return c, err
+	}
+
+	if result == nil {
+		return c, &EntityDoesNotExistError{
+			entityType: connectionTableName,
+			id:         id,
+		}
+	}
+
+	err = dynamodbattribute.UnmarshalMap(result.Attributes, &c)
+	if err != nil {
+		return Connection{}, err
+	}
+
+	return c, nil
+}
+
 func RefreshTtl(id string) (Connection, error) {
 	result, err := dynamodbattribute.MarshalMap(Connection{
 		Id:  id,
