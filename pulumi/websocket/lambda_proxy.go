@@ -11,8 +11,9 @@ import (
 type LambdaProxy struct {
 	pulumi.ResourceState
 
-	lambdaFunction *lambda.Function
-	route          *apigatewayv2.Route
+	Name           string
+	LambdaFunction *lambda.Function
+	Route          *apigatewayv2.Route
 }
 
 type LambdaProxyArgs struct {
@@ -23,15 +24,17 @@ type LambdaProxyArgs struct {
 }
 
 func NewLambdaProxy(ctx *pulumi.Context, name string, args LambdaProxyArgs, opts ...pulumi.ResourceOption) (*LambdaProxy, error) {
-	websocketLambdaProxy := &LambdaProxy{}
-	err := ctx.RegisterComponentResource("jakebaum:websocket:LambdaProxy", name, websocketLambdaProxy, opts...)
+	lambdaProxyGroup := &LambdaProxy{
+		Name: name,
+	}
+	err := ctx.RegisterComponentResource("jakebaum:websocket:LambdaProxy", name, lambdaProxyGroup, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	parentResourceOption := pulumi.ResourceOption(pulumi.Parent(websocketLambdaProxy))
+	parentResourceOption := pulumi.ResourceOption(pulumi.Parent(lambdaProxyGroup))
 
-	websocketLambdaProxy.lambdaFunction, err = lambda.NewFunction(ctx, name, &lambda.FunctionArgs{
+	lambdaProxyGroup.LambdaFunction, err = lambda.NewFunction(ctx, name, &lambda.FunctionArgs{
 		Runtime: pulumi.String("go1.x"),
 		Handler: pulumi.String("main"),
 		Role:    args.LambdaRole.Arn,
@@ -46,7 +49,7 @@ func NewLambdaProxy(ctx *pulumi.Context, name string, args LambdaProxyArgs, opts
 
 	_, err = lambda.NewPermission(ctx, name, &lambda.PermissionArgs{
 		Action:    pulumi.String("lambda:InvokeFunction"),
-		Function:  websocketLambdaProxy.lambdaFunction.Name,
+		Function:  lambdaProxyGroup.LambdaFunction.Name,
 		Principal: pulumi.String("apigateway.amazonaws.com"),
 		SourceArn: args.Api.ExecutionArn.ApplyT(func(executionArn string) (string, error) {
 			return fmt.Sprintf("%v/*", executionArn), nil
@@ -62,14 +65,14 @@ func NewLambdaProxy(ctx *pulumi.Context, name string, args LambdaProxyArgs, opts
 		ConnectionType:          pulumi.String("INTERNET"),
 		ContentHandlingStrategy: pulumi.String("CONVERT_TO_TEXT"),
 		IntegrationMethod:       pulumi.String("POST"),
-		IntegrationUri:          websocketLambdaProxy.lambdaFunction.InvokeArn,
+		IntegrationUri:          lambdaProxyGroup.LambdaFunction.InvokeArn,
 		PassthroughBehavior:     pulumi.String("WHEN_NO_MATCH"),
 	}, parentResourceOption)
 	if err != nil {
 		return nil, err
 	}
 
-	websocketLambdaProxy.route, err = apigatewayv2.NewRoute(ctx, name, &apigatewayv2.RouteArgs{
+	lambdaProxyGroup.Route, err = apigatewayv2.NewRoute(ctx, name, &apigatewayv2.RouteArgs{
 		ApiId:                            args.Api.ID(),
 		RouteKey:                         pulumi.String(args.RouteKey),
 		AuthorizationType:                pulumi.String("NONE"),
@@ -83,7 +86,7 @@ func NewLambdaProxy(ctx *pulumi.Context, name string, args LambdaProxyArgs, opts
 	}
 
 	_, err = apigatewayv2.NewRouteResponse(ctx, name, &apigatewayv2.RouteResponseArgs{
-		RouteId:          websocketLambdaProxy.route.ID(),
+		RouteId:          lambdaProxyGroup.Route.ID(),
 		ApiId:            args.Api.ID(),
 		RouteResponseKey: pulumi.String("$default"),
 	}, parentResourceOption)
@@ -91,5 +94,5 @@ func NewLambdaProxy(ctx *pulumi.Context, name string, args LambdaProxyArgs, opts
 		return nil, err
 	}
 
-	return websocketLambdaProxy, err
+	return lambdaProxyGroup, err
 }
