@@ -2,50 +2,16 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws"
-	"time"
-
-	//"github.com/pulumi/pulumi-aws-apigateway/sdk/go/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/apigatewayv2"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/cloudwatch"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/dynamodb"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/iam"
-	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/lambda"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"tic-tac-toe/websocket"
+	"time"
 )
-
-const basePath = "/api"
-
-func createLambda(ctx *pulumi.Context, name string, role *iam.Role, api *apigatewayv2.Api, environment pulumi.StringMap) (*lambda.Function, error) {
-	lambdaFunction, err := lambda.NewFunction(ctx, name, &lambda.FunctionArgs{
-		Runtime: pulumi.String("go1.x"),
-		Handler: pulumi.String("main"),
-		Role:    role.Arn,
-		Code:    pulumi.NewFileArchive(fmt.Sprintf("../bin/lambda/%s/main.zip", name)),
-		Environment: lambda.FunctionEnvironmentArgs{
-			Variables: environment,
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = lambda.NewPermission(ctx, name, &lambda.PermissionArgs{
-		Action:    pulumi.String("lambda:InvokeFunction"),
-		Function:  lambdaFunction.Name,
-		Principal: pulumi.String("apigateway.amazonaws.com"),
-		SourceArn: api.ExecutionArn.ApplyT(func(executionArn string) (string, error) {
-			return fmt.Sprintf("%v/*", executionArn), nil
-		}).(pulumi.StringOutput),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return lambdaFunction, nil
-}
 
 func createDynamoTable(ctx *pulumi.Context, name string, attributes dynamodb.TableAttributeArray, isTtlEnabled bool) (*dynamodb.Table, error) {
 	var ttl dynamodb.TableTtlPtrInput
@@ -77,46 +43,6 @@ func createApiGatewayWebsocket(ctx *pulumi.Context, name string) (*apigatewayv2.
 	}
 
 	return websocket, nil
-}
-
-func createWebsocketRoute(ctx *pulumi.Context, name string, gatewayApi *apigatewayv2.Api, routeKey string, lambdaFunction *lambda.Function) (*apigatewayv2.Route, error) {
-
-	integration, err := apigatewayv2.NewIntegration(ctx, name, &apigatewayv2.IntegrationArgs{
-		ApiId:                   gatewayApi.ID(),
-		IntegrationType:         pulumi.String("AWS_PROXY"),
-		ConnectionType:          pulumi.String("INTERNET"),
-		ContentHandlingStrategy: pulumi.String("CONVERT_TO_TEXT"),
-		IntegrationMethod:       pulumi.String("POST"),
-		IntegrationUri:          lambdaFunction.InvokeArn,
-		PassthroughBehavior:     pulumi.String("WHEN_NO_MATCH"),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	route, err := apigatewayv2.NewRoute(ctx, name, &apigatewayv2.RouteArgs{
-		ApiId:                            gatewayApi.ID(),
-		RouteKey:                         pulumi.String(routeKey),
-		AuthorizationType:                pulumi.String("NONE"),
-		RouteResponseSelectionExpression: pulumi.String("$default"),
-		Target: integration.ID().ApplyT(func(id string) (string, error) {
-			return fmt.Sprintf("integrations/%v", id), nil
-		}).(pulumi.StringOutput),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = apigatewayv2.NewRouteResponse(ctx, name, &apigatewayv2.RouteResponseArgs{
-		RouteId:          route.ID(),
-		ApiId:            gatewayApi.ID(),
-		RouteResponseKey: pulumi.String("$default"),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return route, nil
 }
 
 func main() {
@@ -193,52 +119,42 @@ func main() {
 			return err
 		}
 
-		websocket, err := createApiGatewayWebsocket(ctx, "websocket")
+		api, err := createApiGatewayWebsocket(ctx, "websocket-api")
 
-		connectFunction, err := createLambda(ctx, "connect", lambdaRole, websocket, pulumi.StringMap{
-			"CONNECTION_TABLE_NAME": connectionTable.Name,
+		connectLambdaProxy, err := websocket.NewLambdaProxy(ctx, "connect", websocket.LambdaProxyArgs{
+			LambdaRole: lambdaRole,
+			Api:        api,
+			LambdaEnvironment: pulumi.StringMap{
+				"CONNECTION_TABLE_NAME": connectionTable.Name,
+			},
+			RouteKey: "$connect",
 		})
 		if err != nil {
 			return err
 		}
-		connectRoute, err := createWebsocketRoute(ctx, "connect", websocket, "$connect", connectFunction)
-		if err != nil {
-			return err
-		}
 
-		defaultFunction, err := createLambda(ctx, "ws-fallback", lambdaRole, websocket, nil)
-		if err != nil {
-			return err
-		}
-		defaultRoute, err := createWebsocketRoute(ctx, "default", websocket, "$default", defaultFunction)
-		if err != nil {
-			return err
-		}
-
-		disconnectFunction, err := createLambda(ctx, "disconnect", lambdaRole, websocket, pulumi.StringMap{
-			"CONNECTION_TABLE_NAME": connectionTable.Name,
+		defaultLambdaProxy, err := websocket.NewLambdaProxy(ctx, "ws-fallback", websocket.LambdaProxyArgs{
+			LambdaRole: lambdaRole,
+			Api:        api,
+			RouteKey:   "$default",
 		})
 		if err != nil {
 			return err
 		}
-		disconnectRoute, err := createWebsocketRoute(ctx, "disconnect", websocket, "$disconnect", disconnectFunction)
-		if err != nil {
-			return err
-		}
 
-		sendMessageFunction, err := createLambda(ctx, "send-message", lambdaRole, websocket, pulumi.StringMap{
-			"CONNECTION_TABLE_NAME": connectionTable.Name,
-			"REGION":                pulumi.String(region.Name),
+		disconnectLambdaProxy, err := websocket.NewLambdaProxy(ctx, "disconnect", websocket.LambdaProxyArgs{
+			LambdaRole: lambdaRole,
+			Api:        api,
+			LambdaEnvironment: pulumi.StringMap{
+				"CONNECTION_TABLE_NAME": connectionTable.Name,
+			},
+			RouteKey: "$disconnect",
 		})
 		if err != nil {
 			return err
 		}
-		sendMessageRoute, err := createWebsocketRoute(ctx, "send-message", websocket, "send-message", sendMessageFunction)
-		if err != nil {
-			return err
-		}
 
-		gameTable, err := createDynamoTable(ctx, "get-game", dynamodb.TableAttributeArray{
+		gameTable, err := createDynamoTable(ctx, "game", dynamodb.TableAttributeArray{
 			&dynamodb.TableAttributeArgs{
 				Name: pulumi.String("Id"),
 				Type: pulumi.String("S"),
@@ -254,45 +170,54 @@ func main() {
 			"REGION":                pulumi.String(region.Name),
 		}
 
-		createGameFunction, err := createLambda(ctx, "create-game", lambdaRole, websocket, gameEnvironment)
-		if err != nil {
-			return err
-		}
-		createGameRoute, err := createWebsocketRoute(ctx, "create-game", websocket, "create-game", createGameFunction)
-		if err != nil {
-			return err
-		}
-
-		getGameFunction, err := createLambda(ctx, "get-game", lambdaRole, websocket, gameEnvironment)
-		if err != nil {
-			return err
-		}
-		getGameRoute, err := createWebsocketRoute(ctx, "get-game", websocket, "get-game", getGameFunction)
+		createGameLambdaProxy, err := websocket.NewLambdaProxy(ctx, "create-game", websocket.LambdaProxyArgs{
+			LambdaRole:        lambdaRole,
+			Api:               api,
+			LambdaEnvironment: gameEnvironment,
+			RouteKey:          "create-game",
+		})
 		if err != nil {
 			return err
 		}
 
-		makeMoveFunction, err := createLambda(ctx, "make-move", lambdaRole, websocket, gameEnvironment)
+		getGameLambdaProxy, err := websocket.NewLambdaProxy(ctx, "get-game", websocket.LambdaProxyArgs{
+			LambdaRole:        lambdaRole,
+			Api:               api,
+			LambdaEnvironment: gameEnvironment,
+			RouteKey:          "get-game",
+		})
 		if err != nil {
 			return err
 		}
-		makeMoveRoute, err := createWebsocketRoute(ctx, "make-move", websocket, "make-move", makeMoveFunction)
+
+		makeMoveLambdaProxy, err := websocket.NewLambdaProxy(ctx, "make-move", websocket.LambdaProxyArgs{
+			LambdaRole:        lambdaRole,
+			Api:               api,
+			LambdaEnvironment: gameEnvironment,
+			RouteKey:          "make-move",
+		})
 		if err != nil {
 			return err
 		}
 
 		websocketDeployment, err := apigatewayv2.NewDeployment(ctx, "websocketDeployment", &apigatewayv2.DeploymentArgs{
-			ApiId: websocket.ID(),
+			ApiId: api.ID(),
 			Triggers: pulumi.StringMap{
 				"deployedAt": pulumi.String(time.Now().Format(time.RFC3339)), // This is somewhat of a hack to force the API to redeploy on changes.  Must be a better way
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{connectRoute, defaultRoute, disconnectRoute, sendMessageRoute, createGameRoute, getGameRoute, makeMoveRoute}))
+		}, pulumi.DependsOn([]pulumi.Resource{
+			connectLambdaProxy,
+			defaultLambdaProxy,
+			disconnectLambdaProxy,
+			createGameLambdaProxy,
+			getGameLambdaProxy,
+			makeMoveLambdaProxy}))
 		if err != nil {
 			return err
 		}
 
 		stage, err := apigatewayv2.NewStage(ctx, "dev", &apigatewayv2.StageArgs{
-			ApiId:        websocket.ID(),
+			ApiId:        api.ID(),
 			DeploymentId: websocketDeployment.ID(),
 			AccessLogSettings: apigatewayv2.StageAccessLogSettingsArgs{
 				DestinationArn: apiGatewayLogGroup.Arn,
