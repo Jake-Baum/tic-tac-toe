@@ -12,9 +12,9 @@ type FinishedError struct {
 
 func (e *FinishedError) Error() string {
 	if e.winner != nil {
-		return fmt.Sprintf("Game has finished. The winner is %s!", *e.winner)
+		return fmt.Sprintf("game has finished. The winner is %s!", *e.winner)
 	}
-	return "Game has ended in a draw"
+	return "game has ended in a draw"
 }
 
 type InvalidMoveError struct {
@@ -30,7 +30,7 @@ type NotPlayersTurnError struct {
 }
 
 func (e *NotPlayersTurnError) Error() string {
-	return fmt.Sprintf("It is not %s's turn", e.player)
+	return fmt.Sprintf("it is not %s's turn", e.player)
 }
 
 type PlayerDoesNotExistError struct {
@@ -39,7 +39,7 @@ type PlayerDoesNotExistError struct {
 }
 
 func (e *PlayerDoesNotExistError) Error() string {
-	return fmt.Sprintf("User %s is not permitted to make moves in game %s", e.player, e.gameId)
+	return fmt.Sprintf("user %s is not permitted to make moves in game %s", e.player, e.gameId)
 }
 
 const (
@@ -69,7 +69,7 @@ func NewGame(playerX string, playerO string) *Game {
 	}
 }
 
-func (game Game) MakeMove(player string, move int) error {
+func (game *Game) MakeMove(player string, move int) error {
 	if !game.IsPlayer(player) {
 		return &PlayerDoesNotExistError{
 			player: player,
@@ -77,14 +77,14 @@ func (game Game) MakeMove(player string, move int) error {
 		}
 	}
 
-	if game.IsDraw() {
+	if game.isDraw() {
 		return &FinishedError{}
 	}
-	if isWinner, winner := game.IsWinner(); isWinner {
+	if isWinner, winner := game.isWinner(); isWinner {
 		return &FinishedError{winner: &winner}
 	}
 
-	if !game.IsValidMove(move) {
+	if !game.isValidMove(move) {
 		return &InvalidMoveError{move: move}
 	}
 
@@ -103,21 +103,21 @@ func (game Game) MakeMove(player string, move int) error {
 	return nil
 }
 
-func (game Game) IsPlayer(player string) bool {
+func (game *Game) IsPlayer(player string) bool {
 	if game.PlayerX == player || game.PlayerO == player {
 		return true
 	}
 	return false
 }
 
-func (game Game) GetOtherPlayer(player string) string {
+func (game *Game) GetOtherPlayer(player string) string {
 	if game.PlayerX == player {
 		return game.PlayerO
 	}
 	return game.PlayerX
 }
 
-func (game Game) IsWinner() (bool, Piece) {
+func (game *Game) isWinner() (bool, Piece) {
 	for _, row := range game.Board {
 		if areItemsInArrayEqual(row) && row[0] != EMPTY {
 			return true, row[0]
@@ -156,7 +156,7 @@ func (game Game) IsWinner() (bool, Piece) {
 	return false, EMPTY
 }
 
-func (game Game) IsBoardFull() bool {
+func (game *Game) isBoardFull() bool {
 	for _, row := range game.Board {
 		for _, cell := range row {
 			if cell == EMPTY {
@@ -168,17 +168,17 @@ func (game Game) IsBoardFull() bool {
 	return true
 }
 
-func (game Game) IsDraw() bool {
-	if !game.IsBoardFull() {
+func (game *Game) isDraw() bool {
+	if !game.isBoardFull() {
 		return false
 	}
 
-	isWinner, _ := game.IsWinner()
+	isWinner, _ := game.isWinner()
 
 	return !isWinner
 }
 
-func (game Game) IsValidMove(square int) bool {
+func (game *Game) isValidMove(square int) bool {
 	if square < 0 || square > 8 {
 		return false
 	}
@@ -199,14 +199,4 @@ func areItemsInArrayEqual(arr []Piece) bool {
 		}
 	}
 	return true
-}
-
-func (game Game) Serialize() string {
-	var serialized string
-	for _, row := range game.Board {
-		for _, cell := range row {
-			serialized += string(cell)
-		}
-	}
-	return serialized
 }
